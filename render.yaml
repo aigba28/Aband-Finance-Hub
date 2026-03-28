@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: aband-finance-hub
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /opt/render/project/data/finance.db
+    disk:
+      name: finance-data
+      mountPath: /opt/render/project/data
+      sizeGB: 1
