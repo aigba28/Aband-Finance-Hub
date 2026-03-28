@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+  finance-hub:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - finance-data:/app/data
+    environment:
+      - PORT=3000
+      - DB_PATH=/app/data/finance.db
+      - SESSION_SECRET=change-this-to-a-random-string-in-production
+    restart: unless-stopped
+volumes:
+  finance-data:
