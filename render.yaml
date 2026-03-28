@@ -10,6 +10,8 @@ services:
         value: production
       - key: DB_PATH
         value: /opt/render/project/data/finance.db
+      - key: SESSION_SECRET
+        generateValue: true
     disk:
       name: finance-data
       mountPath: /opt/render/project/data

@@ -1,7 +1,7 @@
 {
   "name": "aband-finance-hub",
-  "version": "2.0.0",
-  "description": "A-Band Consulting Finance Hub — Multi-year invoicing, P&L, expense tracking",
+  "version": "3.0.0",
+  "description": "A-Band Consulting Finance Hub with authentication",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,7 +10,8 @@
   "dependencies": {
     "express": "^4.21.0",
     "better-sqlite3": "^11.3.0",
-    "cors": "^2.8.5"
+    "express-session": "^1.18.0",
+    "bcryptjs": "^2.4.3"
   },
   "engines": {
     "node": ">=18.0.0"
