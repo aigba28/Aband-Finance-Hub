@@ -174,18 +174,7 @@ async function deleteYear(yr){if(IDX.years.length<=1)return;if(!confirm("Delete 
 async function duplicateYear(from,to){if(IDX.years.includes(to))return alert("Exists.");const r=await api.get("aband-"+from);if(r&&r.value){const data=JSON.parse(r.value);data.company.year=to;data.invoices=[];data.otherRevenue=Array(12).fill(0);const exp={};(data.expenseOrder||DEF_EXP).forEach(c=>exp[c]=Array(12).fill(0));data.expenses=exp;await api.set("aband-"+to,JSON.stringify(data))}IDX.years.push(to);IDX.years.sort();await saveIndex();render();buildYS()}
 async function exportAllYears(){const wb=XLSX.utils.book_new();for(const yr of IDX.years){const r=await api.get("aband-"+yr);if(r&&r.value){const d=JSON.parse(r.value),rows=[];rows.push([(d.company?.name||"")+" — FY "+yr],[],["INVOICES"],["Month","Client","Rate/hr","Hrs/Day","Days","Hours","Subtotal","HST","Total","Status"]);(d.invoices||[]).forEach(iv=>{const s=(iv.rate||0)*(iv.hpd||0)*(iv.days||0);rows.push([iv.month,iv.client,iv.rate,iv.hpd,iv.days,(iv.hpd||0)*(iv.days||0),s,r2(s*.13),r2(s+r2(s*.13)),iv.status])});rows.push([],["EXPENSES"],["Category",...MO,"Total"]);(d.expenseOrder||[]).forEach(cat=>{const v=(d.expenses||{})[cat]||Array(12).fill(0);rows.push([cat,...v,v.reduce((a,b)=>a+b,0)])});const ws=XLSX.utils.aoa_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,"FY "+yr)}}XLSX.writeFile(wb,"ABAND_All_Years.xlsx")}
 
-async function initializeApp(){
-  // 1. Fetch aband-idx to get available years and active year
-  await loadIndex();
-  // 2. Load the active year's financial data (aband-2025, aband-2026, aband-2027, etc.)
-  await loadYear(IDX.active);
-  // 3. Populate the year switcher UI with available years
-  buildTabs();
-  buildYS();
-  // 4. Render the dashboard with the loaded data
-  render();
-}
-async function boot(){if(!await checkAuth())return;await initializeApp();}
+async function boot(){if(!await checkAuth())return;await loadIndex();await loadYear(IDX.active);buildTabs();buildYS();render()}
 function fmt(n){return n===0?"—":new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2}).format(n)}
 function fmt2(n){return new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2}).format(n)}
 function pct(n){return n===0?"—":(n*100).toFixed(1)+"%"}
