@@ -9,10 +9,13 @@ const nodemailer = require("nodemailer");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
-const STORAGE_MODE = process.env.STORAGE_MODE || "sqlite";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 const GITHUB_REPO = process.env.GITHUB_REPO || "";
 const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
+
+// Determine storage mode: explicit env var wins; otherwise auto-detect from DATABASE_URL
+const _defaultMode = process.env.DATABASE_URL ? "postgres" : "sqlite";
+const STORAGE_MODE = process.env.STORAGE_MODE || _defaultMode;
 
 console.log(`\n  Storage: ${STORAGE_MODE.toUpperCase()}`);
 
@@ -76,13 +79,154 @@ class SQLiteStore {
   getLogs(){return this.s.logs.all()}
 }
 
+// ─── PostgreSQL Storage Engine ───
+class PostgreSQLStore {
+  constructor() {
+    const { Pool } = require("pg");
+    this.pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes("localhost")
+        ? false
+        : { rejectUnauthorized: false }
+    });
+    this._ready = this._init();
+  }
+
+  async _init() {
+    const client = await this.pool.connect();
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS kv_store (
+          key         TEXT PRIMARY KEY,
+          value       TEXT NOT NULL,
+          updated_at  TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')),
+          updated_by  TEXT
+        );
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id          SERIAL PRIMARY KEY,
+          "user"      TEXT,
+          action      TEXT,
+          detail      TEXT,
+          ip          TEXT,
+          timestamp   TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+        );
+      `);
+      console.log("  DB: PostgreSQL connected");
+    } finally {
+      client.release();
+    }
+  }
+
+  async get(k) {
+    await this._ready;
+    const res = await this.pool.query("SELECT value FROM kv_store WHERE key = $1", [k]);
+    return res.rows.length ? res.rows[0].value : null;
+  }
+
+  async set(k, v, u) {
+    await this._ready;
+    await this.pool.query(
+      `INSERT INTO kv_store (key, value, updated_at, updated_by)
+       VALUES ($1, $2, to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), $3)
+       ON CONFLICT (key) DO UPDATE
+         SET value = EXCLUDED.value,
+             updated_at = EXCLUDED.updated_at,
+             updated_by = EXCLUDED.updated_by`,
+      [k, v, u || "system"]
+    );
+    return true;
+  }
+
+  async del(k) {
+    await this._ready;
+    await this.pool.query("DELETE FROM kv_store WHERE key = $1", [k]);
+    return true;
+  }
+
+  async list(prefix) {
+    await this._ready;
+    const res = await this.pool.query(
+      "SELECT key FROM kv_store WHERE key LIKE $1 ORDER BY key",
+      [(prefix || "") + "%"]
+    );
+    return res.rows.map(r => r.key);
+  }
+
+  async all() {
+    await this._ready;
+    const res = await this.pool.query("SELECT key, value, updated_at, updated_by FROM kv_store ORDER BY key");
+    return res.rows;
+  }
+
+  async audit(u, a, d, ip) {
+    await this._ready;
+    await this.pool.query(
+      `INSERT INTO audit_log ("user", action, detail, ip) VALUES ($1, $2, $3, $4)`,
+      [u, a, d || "", ip || ""]
+    );
+  }
+
+  async getLogs() {
+    await this._ready;
+    const res = await this.pool.query(`SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 50`);
+    return res.rows;
+  }
+}
+
+// ─── GitHub Data Loader ───
+// Files to fetch from aigba28/aband-data/data/ on startup
+const ABAND_DATA_FILES = [
+  "aband-idx",
+  "aband-2025",
+  "aband-2026",
+  "aband-2027",
+  "_users",
+  "_email_config"
+];
+const ABAND_DATA_BASE = "https://raw.githubusercontent.com/aigba28/aband-data/main/data";
+
+async function loadDataFromGitHub() {
+  console.log("\n  Loading seed data from aigba28/aband-data …");
+  let loaded = 0, skipped = 0, failed = 0;
+
+  for (const name of ABAND_DATA_FILES) {
+    const url = `${ABAND_DATA_BASE}/${name}.json`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.log(`  [seed] SKIP  ${name}.json — HTTP ${res.status}`);
+        skipped++;
+        continue;
+      }
+      const json = await res.json();
+      // Each file has { key, value, updated_at, updated_by }
+      const key   = json.key   || name;
+      const value = typeof json.value === "string" ? json.value : JSON.stringify(json.value);
+      const by    = json.updated_by || "seed";
+      await store.set(key, value, by);
+      console.log(`  [seed] OK    ${name}.json → key="${key}"`);
+      loaded++;
+    } catch (e) {
+      console.error(`  [seed] ERROR ${name}.json — ${e.message}`);
+      failed++;
+    }
+  }
+
+  console.log(`  Seed complete: ${loaded} loaded, ${skipped} skipped, ${failed} failed\n`);
+}
+
 // ─── Init ───
 let store;
-if (STORAGE_MODE==="github") {
-  if (!GITHUB_TOKEN||!GITHUB_REPO){console.error("\n  ERROR: Set GITHUB_TOKEN and GITHUB_REPO env vars\n");process.exit(1)}
+if (STORAGE_MODE === "github") {
+  if (!GITHUB_TOKEN || !GITHUB_REPO) { console.error("\n  ERROR: Set GITHUB_TOKEN and GITHUB_REPO env vars\n"); process.exit(1); }
   store = new GitHubStore(GITHUB_TOKEN, GITHUB_REPO, GITHUB_BRANCH);
   console.log(`  Repo: ${GITHUB_REPO}`);
-} else { store = new SQLiteStore(); }
+} else if (STORAGE_MODE === "postgres" || process.env.DATABASE_URL) {
+  if (!process.env.DATABASE_URL) { console.error("\n  ERROR: Set DATABASE_URL env var for PostgreSQL\n"); process.exit(1); }
+  store = new PostgreSQLStore();
+} else {
+  store = new SQLiteStore();
+}
 
 async function getUsers(){const r=await store.get("_users");if(!r)return[];try{return JSON.parse(r)}catch(e){return[]}}
 async function saveUsers(u){await store.set("_users",JSON.stringify(u),"system")}
@@ -121,7 +265,7 @@ app.delete("/api/data/:key",auth,writer,async(q,r)=>{await store.del(q.params.ke
 app.get("/api/backup",auth,async(q,r)=>{r.json({exported_at:new Date().toISOString(),exported_by:q.session?.user?.username,storage:STORAGE_MODE,records:await store.all()})});
 app.post("/api/restore",auth,admin,async(q,r)=>{const{records}=q.body;if(!Array.isArray(records))return r.status(400).json({error:"Need records array"});for(const rec of records)await store.set(rec.key,rec.value,q.session.user.username);r.json({success:true,restored:records.length})});
 app.get("/api/health",async(q,r)=>{const keys=await store.list();r.json({status:"ok",storage:STORAGE_MODE,records:keys.length,uptime:Math.round(process.uptime())})});
-app.get("/api/audit",auth,admin,async(q,r)=>{store.getLogs?r.json({logs:store.getLogs()}):r.json({logs:[],note:"Audit logs in SQLite mode only"})});
+app.get("/api/audit",auth,admin,async(q,r)=>{if(store.getLogs){try{r.json({logs:await store.getLogs()})}catch(e){r.status(500).json({error:e.message})}}else{r.json({logs:[],note:"Audit logs not available in this storage mode"})}});
 
 // ─── Email ───
 app.get("/api/email/config",auth,async(q,r)=>{
@@ -190,9 +334,26 @@ app.use("/api",(err,q,r,n)=>{console.error("API error:",err.message);r.status(50
 app.get("/",auth,(q,r)=>r.sendFile(path.join(__dirname,"public","index.html")));
 app.get("*",(q,r)=>{q.session?.user?r.sendFile(path.join(__dirname,"public","index.html")):r.redirect("/login.html")});
 
-(async()=>{await initAdmin();app.listen(PORT,"0.0.0.0",()=>{console.log(`
+(async () => {
+  // For PostgreSQL: wait for schema init, load seed data, then create default admin
+  if (STORAGE_MODE === "postgres" || (STORAGE_MODE !== "github" && STORAGE_MODE !== "sqlite" && process.env.DATABASE_URL)) {
+    await store._ready;
+    await loadDataFromGitHub();
+  }
+  await initAdmin();
+
+  const storageLabel = STORAGE_MODE === "github"
+    ? "GitHub → " + GITHUB_REPO
+    : STORAGE_MODE === "postgres"
+      ? "PostgreSQL"
+      : "SQLite";
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`
 ╔═══════════════════════════════════════════════╗
 ║  A-Band Consulting — Finance Hub  v3.1        ║
 ║  http://localhost:${String(PORT).padEnd(5)}                        ║
-║  Storage: ${(STORAGE_MODE==="github"?"GitHub → "+GITHUB_REPO:"SQLite").padEnd(35)}║
-╚═══════════════════════════════════════════════╝`)})})();
+║  Storage: ${storageLabel.padEnd(35)}║
+╚═══════════════════════════════════════════════╝`);
+  });
+})();
