@@ -1,6 +1,6 @@
 {
   "name": "aband-finance-hub",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "A-Band Consulting Finance Hub with authentication",
   "main": "server.js",
   "scripts": {
@@ -9,10 +9,13 @@
   },
   "dependencies": {
     "express": "^4.21.0",
-    "better-sqlite3": "^11.3.0",
     "express-session": "^1.18.0",
     "bcryptjs": "^2.4.3",
-    "nodemailer": "^6.9.8"
+    "nodemailer": "^6.9.8",
+    "pg": "^8.13.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.3.0"
   },
   "engines": {
     "node": ">=18.0.0"
