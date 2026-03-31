@@ -183,22 +183,35 @@ const ABAND_DATA_FILES = [
   "_users",
   "_email_config"
 ];
-const ABAND_DATA_BASE = "https://raw.githubusercontent.com/aigba28/aband-data/main/data";
+const ABAND_DATA_API = "https://api.github.com/repos/aigba28/aband-data/contents/data";
 
 async function loadDataFromGitHub() {
+  if (!GITHUB_TOKEN) {
+    console.warn("\n  [seed] WARNING: GITHUB_TOKEN is not set — skipping data load (private repo requires authentication)\n");
+    return;
+  }
+
   console.log("\n  Loading seed data from aigba28/aband-data …");
   let loaded = 0, skipped = 0, failed = 0;
 
   for (const name of ABAND_DATA_FILES) {
-    const url = `${ABAND_DATA_BASE}/${name}.json`;
+    const url = `${ABAND_DATA_API}/${name}.json?ref=main`;
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
+          Accept: "application/vnd.github+json"
+        }
+      });
       if (!res.ok) {
         console.log(`  [seed] SKIP  ${name}.json — HTTP ${res.status}`);
         skipped++;
         continue;
       }
-      const json = await res.json();
+      const apiJson = await res.json();
+      // GitHub API returns { content: "<base64>", ... } — decode it
+      const raw  = Buffer.from(apiJson.content, "base64").toString("utf-8");
+      const json = JSON.parse(raw);
       // Each file has { key, value, updated_at, updated_by }
       const key   = json.key   || name;
       const value = typeof json.value === "string" ? json.value : JSON.stringify(json.value);
