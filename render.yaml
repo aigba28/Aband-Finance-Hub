@@ -1,3 +1,9 @@
+databases:
+  - name: aband-db
+    plan: free
+    databaseName: aband_finance
+    user: aband
+
 services:
   - type: web
     name: aband-finance-hub
@@ -8,11 +14,11 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DB_PATH
-        value: /opt/render/project/data/finance.db
+      - key: STORAGE_MODE
+        value: postgres
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aband-db
+          property: connectionString
       - key: SESSION_SECRET
         generateValue: true
-    disk:
-      name: finance-data
-      mountPath: /opt/render/project/data
-      sizeGB: 1
