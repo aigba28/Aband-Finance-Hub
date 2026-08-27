@@ -536,7 +536,10 @@ w.document.write(`<html><head><title>${d.n}</title><link href="https://fonts.goo
 w.document.close();setTimeout(()=>w.print(),600);closeModal()}
 
 function exportInvExcel(ivId){const d=getInvData(ivId);if(!d)return;
-const rows=[["INVOICE — "+d.n],[],["From:",D.company.name,"","Bill To:",d.iv.client],["",D.company.address,"","",d.cl.address||""],["",D.company.city,"","",d.cl.city||""],["",D.company.phone,"","Attn:",d.cl.contact||""],["",D.company.email,"","",d.cl.email||""]];if(d.showEC)rows.push(["","","","End Client:",d.endClient]);rows.push([],,["Invoice #",d.n],["Invoice Date",d.today],["Due Date",d.due],["Payment Terms",d.iv.terms||d.cl.terms||"Net 30"],[],["#","Description","Rate/hr","Hrs/Day","Days","Total Hours","Amount"],["1",d.desc+(d.iv.notes?" ("+d.iv.notes+")":""),d.iv.rate,d.iv.hpd,d.iv.days,d.hrs,d.s],[],["","","","","","Subtotal",d.s],["","","","","","HST (13%)",d.hst],["","","","","","TOTAL DUE",d.total]];
+const descTxt=d.desc+(d.iv.notes?" ("+d.iv.notes+")":"");
+const rows=[["INVOICE — "+d.n],[],["From:",D.company.name,"","Bill To:",d.iv.client],["",D.company.address,"","",d.cl.address||""],["",D.company.city,"","",d.cl.city||""],["",D.company.phone,"","Attn:",d.cl.contact||""],["",D.company.email,"","",d.cl.email||""]];
+if(d.showEC)rows.push(["","","","End Client:",d.endClient]);
+rows.push([],["Invoice #",d.n],["Invoice Date",d.today],["Due Date",d.due],["Payment Terms",d.iv.terms||d.cl.terms||"Net 30"],[],["#","Description","Rate/hr","Hrs/Day","Days","Total Hours","Amount"],["1",descTxt,d.iv.rate,d.iv.hpd,d.iv.days,d.hrs,d.s],[],["","","","","","Subtotal",d.s],["","","","","","HST (13%)",d.hst],["","","","","","TOTAL DUE",d.total]);
 const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=[{wch:6},{wch:36},{wch:12},{wch:10},{wch:8},{wch:14},{wch:14}];
 XLSX.utils.book_append_sheet(wb,ws,d.n);XLSX.writeFile(wb,d.n+".xlsx");closeModal()}
 
