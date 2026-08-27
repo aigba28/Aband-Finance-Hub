@@ -11,6 +11,23 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--navy:#0F1D3D;--dark:#1B2A4A;--blue:#3B82F6;--green:#10B981;--red:#EF4444;--amber:#F59E0B;--purple:#8B5CF6;--teal:#06B6D4;--pink:#EC4899;--bg:#06080f;--card:#0e1525;--card2:#131b2e;--surface:#1a2338;--border:#243049;--text:#e2e8f0;--dim:#7a8ba8;--input:#0b1120}
+[data-theme="light"]{--bg:#f0f2f5;--card:#ffffff;--card2:#f8f9fb;--surface:#edf0f4;--border:#d1d9e6;--text:#1a2332;--dim:#64748b;--input:#ffffff}
+[data-theme="light"] .header{background:linear-gradient(135deg,#0F1D3D 0%,#162850 100%)}
+[data-theme="light"] input,[data-theme="light"] select,[data-theme="light"] textarea{color:#1e40af;border-color:#c7d2e0}
+[data-theme="light"] input:focus,[data-theme="light"] select:focus{border-color:#3B82F6;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+[data-theme="light"] .tab.active{background:linear-gradient(135deg,#dde4ef,#e8ecf4);color:#1a2332;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+[data-theme="light"] .tab:hover{background:#e2e8f0;color:#1a2332}
+[data-theme="light"] table tr:hover{background:rgba(59,130,246,.04)}
+[data-theme="light"] .stripe{background:rgba(59,130,246,.03)}
+[data-theme="light"] .kpi{box-shadow:0 2px 8px rgba(0,0,0,.06)}
+[data-theme="light"] .card{box-shadow:0 2px 8px rgba(0,0,0,.06)}
+[data-theme="light"] .modal{background:#ffffff;border-color:#d1d9e6;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+[data-theme="light"] .overlay{background:rgba(0,0,0,.3)}
+[data-theme="light"] .section-bar{background:linear-gradient(135deg,#e8ecf4,#dde4ef);color:#1a2332}
+[data-theme="light"] .user-dropdown .dd{background:#fff;border-color:#d1d9e6;box-shadow:0 12px 32px rgba(0,0,0,.1)}
+[data-theme="light"] .dd-item:hover{background:#f0f2f5}
+[data-theme="light"] ::-webkit-scrollbar-thumb{background:#c7d2e0}
+[data-theme="light"] .content::before{opacity:.03}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:9px}
 input,select,textarea{font-family:'JetBrains Mono',monospace;background:var(--input);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--blue);font-size:12px;width:100%;text-align:right;transition:border .2s,box-shadow .2s;min-width:90px}
@@ -107,6 +124,7 @@ tr.stripe{background:rgba(59,130,246,.03)}
         <button class="dd-item" id="ddSettings" onclick="switchTab('settings')" style="display:none">⚙️ Settings</button>
         <button class="dd-item" onclick="switchTab('database')">🗄️ Database</button>
         <button class="dd-item" onclick="switchTab('audit')" id="ddAudit" style="display:none">📋 Audit log</button>
+        <button class="dd-item" onclick="toggleTheme()" id="themeBtn">🌙 Dark theme</button>
         <button class="dd-item danger" onclick="logout()">↩ Sign out</button>
       </div>
     </div>
@@ -123,6 +141,12 @@ const api={
   async del(k){try{await fetch("/api/data/"+encodeURIComponent(k),{method:"DELETE"})}catch(e){}}
 };
 async function logout(){await fetch("/api/auth/logout",{method:"POST"});location.href="/login.html"}
+
+// ─── Theme Toggle ───
+function toggleTheme(){const cur=document.documentElement.getAttribute("data-theme");const next=cur==="light"?"dark":"light";document.documentElement.setAttribute("data-theme",next==="dark"?"":"light");try{localStorage.setItem("aband-theme",next)}catch(e){}updateThemeBtn()}
+function updateThemeBtn(){const btn=document.getElementById("themeBtn");if(!btn)return;const isLight=document.documentElement.getAttribute("data-theme")==="light";btn.textContent=isLight?"🌙 Dark theme":"☀️ Light theme"}
+function initTheme(){try{const saved=localStorage.getItem("aband-theme");if(saved==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}updateThemeBtn()}
+initTheme();
 
 // ─── Idle Timeout (5 min) ───
 let _idleTimer=null;const IDLE_TIMEOUT=5*60*1000;
